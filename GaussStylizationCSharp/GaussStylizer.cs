@@ -7,6 +7,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using GaussStylization.Internal;
 
 namespace GaussStylization
@@ -82,6 +84,86 @@ namespace GaussStylization
             int iterations,
             GaussStylizationOptions? options = null)
         {
+            GaussStylizationCore? core = CreateCore(vertices, triangles, styles, faceGroups, vertexWeights, gridAxes, iterations, options);
+            return core == null ? (double[])vertices.Clone() : core.Run(iterations);
+        }
+
+        /// <summary>
+        /// Asynchronous, cancellable version of the multi-style <c>Stylize</c> overload. The argument checks run
+        /// synchronously (so invalid arguments throw from this call, not from the returned task); the optimisation
+        /// then runs on the thread pool. Cancellation is observed between the inner steps and inside the linear
+        /// solver, so it takes effect within a fraction of one outer iteration; the returned task is then
+        /// canceled (<see cref="OperationCanceledException"/>) and no partial result is returned.
+        /// </summary>
+        /// <param name="vertices">Vertex positions, flat xyz (length 3n).</param>
+        /// <param name="triangles">Triangle vertex indices, flat (length 3m); the mesh must be edge-manifold.</param>
+        /// <param name="styles">The styles; see the synchronous overload.</param>
+        /// <param name="faceGroups">Optional style index per triangle; null puts every triangle into style 0.</param>
+        /// <param name="vertexWeights">Optional stylization weight per vertex.</param>
+        /// <param name="gridAxes">Optional grid frame (nine values).</param>
+        /// <param name="iterations">Number of outer iterations.</param>
+        /// <param name="options">Global tuning parameters; null uses the defaults.</param>
+        /// <param name="progress">Optional; receives a report after every completed outer iteration. Reports are made
+        /// from a thread-pool thread, so use <see cref="Progress{T}"/> to get them on the creating context.</param>
+        /// <param name="cancellationToken">Cancels the work.</param>
+        /// <returns>Task yielding new vertex positions, flat xyz (length 3n).</returns>
+        public static Task<double[]> StylizeAsync(
+            double[] vertices,
+            int[] triangles,
+            IReadOnlyList<GaussStyle> styles,
+            int[]? faceGroups,
+            double[]? vertexWeights,
+            double[]? gridAxes,
+            int iterations,
+            GaussStylizationOptions? options = null,
+            IProgress<GaussStylizationProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (cancellationToken.IsCancellationRequested) return Task.FromCanceled<double[]>(cancellationToken);
+            GaussStylizationCore? core = CreateCore(vertices, triangles, styles, faceGroups, vertexWeights, gridAxes, iterations, options);
+            if (core == null) return Task.FromResult((double[])vertices.Clone());
+            return Task.Run(() => core.Run(iterations, cancellationToken, progress), cancellationToken);
+        }
+
+        /// <summary>Asynchronous, cancellable version of the single-style <c>Stylize</c> overload.</summary>
+        /// <param name="vertices">Vertex positions, flat xyz (length 3n).</param>
+        /// <param name="triangles">Triangle vertex indices, flat (length 3m); the mesh must be edge-manifold.</param>
+        /// <param name="preferredDirections">The preferred surface normals, flat xyz triples.</param>
+        /// <param name="vertexWeights">Optional stylization weight per vertex.</param>
+        /// <param name="gridAxes">Optional grid frame (nine values).</param>
+        /// <param name="iterations">Number of outer iterations.</param>
+        /// <param name="options">Global tuning parameters; null uses the defaults.</param>
+        /// <param name="progress">Optional progress reports, one per completed outer iteration.</param>
+        /// <param name="cancellationToken">Cancels the work.</param>
+        /// <returns>Task yielding new vertex positions, flat xyz (length 3n).</returns>
+        public static Task<double[]> StylizeAsync(
+            double[] vertices,
+            int[] triangles,
+            double[] preferredDirections,
+            double[]? vertexWeights,
+            double[]? gridAxes,
+            int iterations,
+            GaussStylizationOptions? options = null,
+            IProgress<GaussStylizationProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (preferredDirections == null) throw new ArgumentNullException(nameof(preferredDirections));
+            return StylizeAsync(
+                vertices, triangles, new[] { new GaussStyle(preferredDirections) }, null,
+                vertexWeights, gridAxes, iterations, options, progress, cancellationToken);
+        }
+
+        /// <summary>Validates everything; returns null when the result is simply a copy of the input.</summary>
+        private static GaussStylizationCore? CreateCore(
+            double[] vertices,
+            int[] triangles,
+            IReadOnlyList<GaussStyle> styles,
+            int[]? faceGroups,
+            double[]? vertexWeights,
+            double[]? gridAxes,
+            int iterations,
+            GaussStylizationOptions? options)
+        {
             if (vertices == null) throw new ArgumentNullException(nameof(vertices));
             if (triangles == null) throw new ArgumentNullException(nameof(triangles));
             if (styles == null) throw new ArgumentNullException(nameof(styles));
@@ -150,14 +232,13 @@ namespace GaussStylization
                 mu[s] = style.Mu;
             }
 
-            if (iterations == 0 || nf == 0) return (double[])vertices.Clone();
+            if (iterations == 0 || nf == 0) return null;
 
             var topoProbe = new MeshTopology(vertices, triangles); // also validates manifoldness
             bool[] fixedVertices = topoProbe.ComputeFixedVertices(options.FixedVertices);
 
             int[] groups = faceGroups ?? new int[nf];
-            var core = new GaussStylizationCore(vertices, triangles, functions, mu, groups, vertexWeights, options, fixedVertices);
-            return core.Run(iterations);
+            return new GaussStylizationCore(vertices, triangles, functions, mu, groups, vertexWeights, options, fixedVertices);
         }
 
         /// <summary>Single-precision convenience overload; computation is done in double precision.</summary>

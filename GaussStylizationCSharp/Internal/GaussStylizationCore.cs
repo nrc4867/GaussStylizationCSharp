@@ -9,6 +9,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace GaussStylization.Internal
@@ -53,14 +54,23 @@ namespace GaussStylization.Internal
             }
         }
 
-        public double[] Run(int iterations)
+        /// <summary>
+        /// Runs the optimisation. Cancellation is observed between every inner step and inside the linear
+        /// solver, and reported as <see cref="OperationCanceledException"/>.
+        /// </summary>
+        public double[] Run(int iterations, CancellationToken cancellationToken = default, IProgress<GaussStylizationProgress>? progress = null)
         {
             var u = (double[])_v.Clone();
-            for (int i = 0; i < iterations; i++) SingleIteration(u);
+            cancellationToken.ThrowIfCancellationRequested();
+            for (int i = 0; i < iterations; i++)
+            {
+                SingleIteration(u, cancellationToken);
+                progress?.Report(new GaussStylizationProgress(i + 1, iterations));
+            }
             return u;
         }
 
-        private void SingleIteration(double[] u)
+        private void SingleIteration(double[] u, CancellationToken ct)
         {
             int nf = _topo.FaceCount, ne = _topo.EdgeCount, nv = _topo.VertexCount;
             int[] ev = _topo.EdgeVertices, ef = _topo.EdgeFaces, fe = _topo.FaceEdges;
@@ -76,6 +86,7 @@ namespace GaussStylization.Internal
 
             for (int iter = 0; iter < _inner; iter++)
             {
+                ct.ThrowIfCancellationRequested();
                 // ---- face step: update normals by a (projected) Newton step ------------------
                 ParallelFor(nf, f =>
                 {
@@ -138,6 +149,8 @@ namespace GaussStylization.Internal
                 });
             }
 
+            ct.ThrowIfCancellationRequested();
+
             // right-hand side contribution of the target edges (equation 16)
             var target = new Vec3[nv];
             for (int e = 0; e < ne; e++)
@@ -168,6 +181,8 @@ namespace GaussStylization.Internal
                 rot[i] = Mat3.FitRotation(sb);
             });
 
+            ct.ThrowIfCancellationRequested();
+
             // ---- global step -------------------------------------------------------------------
             var arap = ArapRhs(rot);
             var rhs = new double[3][];
@@ -185,7 +200,7 @@ namespace GaussStylization.Internal
                 rhs[0][i] = bc.X; rhs[1][i] = bc.Y; rhs[2][i] = bc.Z;
                 for (int d = 0; d < 3; d++) { x[d][i] = u[3 * i + d]; fixedValues[d][i] = _v[3 * i + d]; }
             }
-            Parallel.For(0, 3, d => _solver.Solve(rhs[d], fixedValues[d], x[d]));
+            Parallel.For(0, 3, new ParallelOptions { CancellationToken = ct }, d => _solver.Solve(rhs[d], fixedValues[d], x[d], ct));
             for (int i = 0; i < nv; i++)
                 for (int d = 0; d < 3; d++) u[3 * i + d] = x[d][i];
         }

@@ -6,6 +6,7 @@
 // (https://github.com/ugogon/gaussStylization). See NOTICE.md.
 
 using System;
+using System.Threading;
 
 namespace GaussStylization.Internal
 {
@@ -87,7 +88,7 @@ namespace GaussStylization.Internal
         /// <paramref name="fixedValues"/> the prescribed values (read at fixed vertices), and
         /// <paramref name="x"/> holds the initial guess on entry and the full solution on exit.
         /// </summary>
-        public void Solve(double[] b, double[] fixedValues, double[] x)
+        public void Solve(double[] b, double[] fixedValues, double[] x, CancellationToken cancellationToken = default)
         {
             int nu = _unknownVertex.Length;
             var rhs = new double[nu];
@@ -120,6 +121,7 @@ namespace GaussStylization.Internal
                     double rz = Dot(r, z);
                     for (int it = 0; it < _maxIterations; it++)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         Multiply(p, q);
                         double pq = Dot(p, q);
                         if (!(pq > 0)) break;
