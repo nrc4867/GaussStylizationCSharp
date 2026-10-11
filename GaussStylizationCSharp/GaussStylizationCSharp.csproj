@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>GaussStylization</RootNamespace>
+    <AssemblyName>GaussStylization</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Package metadata (so the project can be packed; nothing is published by this repo yet) -->
+    <PackageId>GaussStylization</PackageId>
+    <Version>0.1.0</Version>
+    <Description>Managed C# port of Gauss Stylization (mesh stylization from preferred surface normals). Arrays in, arrays out; no native dependencies.</Description>
+    <PackageTags>mesh;geometry;stylization;normals;arap;gauss-stylization</PackageTags>
+    <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Copyright>Derived from gaussStylization (https://github.com/ugogon/gaussStylization), MPL-2.0</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GaussStylizationCSharp.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\NOTICE.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
