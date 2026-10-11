@@ -11,7 +11,7 @@
 
     <!-- Package metadata (so the project can be packed; nothing is published by this repo yet) -->
     <PackageId>GaussStylization</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Description>Managed C# port of Gauss Stylization (mesh stylization from preferred surface normals). Arrays in, arrays out; no native dependencies.</Description>
     <PackageTags>mesh;geometry;stylization;normals;arap;gauss-stylization</PackageTags>
     <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
