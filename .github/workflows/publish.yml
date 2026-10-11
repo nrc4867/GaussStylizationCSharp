@@ -1,0 +1,40 @@
+name: Publish to NuGet
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # attach the package to the GitHub Release
+  id-token: write   # required for NuGet Trusted Publishing (OIDC)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test
+        run: dotnet test -c Release
+
+      - name: Pack
+        run: dotnet pack GaussStylizationCSharp -c Release -o artifacts
+
+      # Exchanges the GitHub OIDC token for a short-lived nuget.org API key.
+      - name: NuGet login (Trusted Publishing)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}   # your nuget.org profile name (not email)
+
+      - name: Push
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.nupkg
